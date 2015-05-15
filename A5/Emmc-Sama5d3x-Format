@@ -1,0 +1,124 @@
+#!/bin/bash
+
+if [[ -z $1 || -z $2 || -z $3 ]]
+then
+	echo "Emmc-Sama5d3x-Format Usage:"
+	echo "	Emmc-Sama5d3x-Format <device> <boot.bin> <sama5d31ek.dtb> <zImage> <u-boot.bin>"
+	echo "	Example: ./Emmc-Sama5d3x-Format /dev/sdd boot.bin sama5d31ek.dtb zImage u-boot.bin"
+	exit
+fi
+
+if ! [ -e "/dev/ttyACM0" ] ; 
+then
+	echo "None /dev/ttyACM0!"
+	exit
+fi
+
+cd /work/cortex-A5/SAM-BA2.14/sam-ba_cdc_linux
+echo "****************************************************************************" >> logfile.log
+date >>logfile.log
+echo "-->Step1:" >>logfile.log
+./sam-ba_64 /dev/ttyACM0 at91sama5d3x-ek historyCommand.tcl >> logfile.log 2>&1
+
+echo "EMMC init OK!"
+echo "EMMC init OK!" >> logfile.log
+
+
+while ! [ -e $1 ]
+do
+sleep 2
+echo "Please insert  USB_Device"
+done
+
+#if ! [ -e $1 ] ;
+#then
+#        echo "None "$1" this device!"
+#        exit
+#fi
+
+
+
+#if ! [[ -e $2 ]]
+#then
+#	echo "Incorrect boot.bin location!"
+#	exit
+#fi
+
+#if ! [[ -e $3 ]]
+#then
+#	echo "Incorrect sama5d31ek.dtb location!"
+#	exit
+#fi
+
+#if ! [[ -e $4 ]]
+#then
+#	echo "Incorrect zImage location!"
+#	exit
+#fi
+
+
+echo "-->Step2:" >>logfile.log
+echo "All data on "$1" now will be destroyed!"
+echo "All data on "$1" now will be destroyed!" >> logfile.log
+
+#echo "All data on "$1" now will be destroyed! Continue? [y/n]"
+#read ans
+#if ! [ $ans == 'y' ]
+#then
+#	exit
+#fi
+
+echo "[Partitioning $1...]"
+echo "[Partitioning $1...]" >> logfile.log
+
+DRIVE=$1
+dd if=/dev/zero of=$DRIVE bs=1024 count=1024
+	 
+SIZE=`fdisk -l $DRIVE | grep Disk | awk '{print $5}'`
+	 
+echo DISK SIZE - $SIZE bytes
+ 
+CYLINDERS=`echo $SIZE/255/63/512 | bc`
+ 
+echo CYLINDERS - $CYLINDERS
+{
+echo ,9,0x0C,*
+echo ,,,-
+} | sfdisk -D -H 255 -S 63 -C $CYLINDERS $DRIVE
+
+echo "[Making filesystems...]"
+
+
+mkfs.msdos  "$1"1
+mkfs.ext4   "$1"2
+#mkfs.vfat -F 32 -n boot "$1"1 &> /dev/null
+#mkfs.ext4 -L rootfs "$1"2 &> /dev/null
+
+
+
+echo "[Copying Boot_1 files...]"
+echo "[Copying Boot_1 files...]" >>logfile.log
+rm /mnt/tmp/* -rf
+mount "$1"1 /mnt/tmp/
+cp /mnt/hgfs/share/A5/5c-lsd/u-boot-emmc/$2 /mnt/tmp/boot.bin
+cp /mnt/hgfs/share/A5/5c-lsd/u-boot-emmc/$3 /mnt/tmp/sama5d31ek.dtb
+cp /mnt/hgfs/share/A5/5c-lsd/u-boot-emmc/$4 /mnt/tmp/zImage
+cp /mnt/hgfs/share/A5/5c-lsd/u-boot-emmc/$5 /mnt/tmp/u-boot.bin
+echo "[Sync Boot_1]"
+echo "[Sync Boot_1]" >>logfile.log
+sync
+umount "$1"1
+
+echo "[Copying Boot_2 files...]"
+echo "[Copying Boot_2 files...]" >>logfile.log
+mount "$1"2 /mnt/tmp/
+#cp -rf  /work/cortex-A5/Linux/fs/buildroot-at91/LGF/nfs_rootfs/5C_LSD_V2.0/* /mnt/tmp/
+cp -drf   /work/cortex-A5/Linux/fs/qt5-buildroot/buildroot/output/images/rootfs/* /mnt/tmp/
+chmod 777 /mnt/tmp/root -R
+echo "[Sync Boot_2]"
+echo "[Sync Boot_2]" >>logfile.log
+sync
+umount "$1"2
+
+echo "[Done]"
+echo "[Done]" >>logfile.log

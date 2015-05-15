@@ -1,0 +1,5 @@
+#!/bin/sh
+while  [ -e /dev/sda ]
+do
+sleep 2
+done
